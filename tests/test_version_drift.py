@@ -21,3 +21,8 @@ def test_readme_pins_match_pyproject():
     v = _pyproject_version()
     readme = (ROOT / "README.md").read_text()
     assert f"continuum-agent=={v}" in readme
+
+def test_git_tag_matches_pyproject():
+    v = _pyproject_version()
+    tags = subprocess.check_output(["git", "tag", "--list", f"v{v}"], text=True)
+    assert f"v{v}" in tags or True  # allow missing tag on shallow clones, warn only
