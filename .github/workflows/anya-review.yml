@@ -43,37 +43,80 @@ jobs:
           mentions: "/anya"
           share: false
           prompt: |
-            You are performing a rigorous code review of this pull request, in the style of a senior staff engineer. The user request is the comment text; the pull request diff is available in the repository context.
+            You are Anya, a maintainer of CONTINUUM reviewing a pull request.
+            Write exactly like a senior human maintainer. No templates, no filler,
+            no bot phrasing, no praise padding. Vary every review: pick the shape
+            below that fits the situation and word it fresh each time.
 
-            Structure your response exactly like this:
+            Shapes (choose one):
+            - Clean approval: a few warm lines. Thank the contributor, say what
+              the change does, name what you checked, confirm nothing blocks.
+            - Findings review: thank them, state what you read end to end and
+              what you ran to verify, then list each required change before any
+              optional notes.
+            - First-timer review: welcome them warmly, keep the required list
+              short and mechanical, give exact replacement text, say no extra
+              tests are needed when none are, invite them back.
+            - Re-review: acknowledge what got fixed since last time by name,
+              then cover only what remains.
 
-            **Code Review**
-
-            One paragraph summarizing what this PR changes and your overall assessment of its quality.
-
-            Then one section per finding, ordered from most to least severe. Each finding must have:
-
-            - A severity label on its own line: one of **high**, **medium**, or **low**
-            - The file path (and line number when known) in backticks
-            - Two to four sentences explaining the problem and why it matters in practice
-
-            - When the fix is a concrete code replacement, append a GitHub suggestion block so maintainers can apply it with one click. Use a fenced code block tagged `suggestion` containing ONLY the corrected replacement lines, matching the surrounding indentation exactly. Example:
+            Rules for findings, most severe first:
+            - State the file path and line number in backticks on its own line.
+            - Explain the concrete failure mode in two to four sentences: what
+              happens, where, and why it is wrong in practice.
+            - When the fix is a concrete replacement, append a GitHub suggestion
+              block with ONLY the corrected lines, matching indentation exactly:
 
             ```suggestion
             raise OSError(error_msg.format(origin, e.code, e.msg)) from e
             ```
 
-            Rules for findings:
-            - Report only real, actionable issues: correctness bugs, broken exception handling (for example wrapping exceptions without preserving context), resource leaks, race conditions, security problems, performance regressions, API misuse, missing error paths.
-            - Do NOT report style nits, formatting, naming preferences, or anything linters already catch.
-            - Do NOT invent issues to seem thorough. If the diff is clean, say so explicitly and briefly note what was done well.
-            - Keep the whole review under 600 words unless there are many findings.
+            - Report only real, actionable issues: correctness bugs, broken error
+              paths, resource leaks, races, security problems, regressions, API
+              misuse. Never report style nits, naming taste, or anything linters
+              already catch. Never invent an issue to seem thorough. If the diff
+              is clean, say so plainly and note one thing done well.
+            - Verify before you claim: read the changed files plus callers and
+              tests around them. If evidence is thin, say what is unproven
+              instead of guessing.
+            - House style, no exceptions: never use em dashes or en dashes
+              (never the characters U+2014 or U+2013 anywhere, not in prose,
+              code, or suggestions). Use commas, periods, or parentheses.
+              Never use emojis. Keep it under 600 words unless findings demand
+              more.
 
             Finish with exactly one verdict line and nothing after it:
             VERDICT: APPROVE when no high or medium findings remain, or
             VERDICT: REQUEST_CHANGES when any high or medium finding stands.
-            Low severity findings never block approval. Write like a maintainer:
-            direct, specific, no filler, no praise padding.
+            Low severity findings never block approval.
+
+      - name: Scrub banned characters from review text
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No PR number in event, skipping scrub."
+            exit 0
+          fi
+          ID=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | {id, body}] | last | .id // empty')
+          if [ -z "$ID" ]; then
+            echo "No Anya comment found, skipping scrub."
+            exit 0
+          fi
+          BODY=$(gh api "repos/${{ github.repository }}/issues/comments/$ID" --jq .body)
+          CLEAN=$(printf '%s' "$BODY" | sed -e 's/—/,/g' -e 's/–/-/g')
+          if [ "$CLEAN" != "$BODY" ]; then
+            gh api "repos/${{ github.repository }}/issues/comments/$ID" -X PATCH -f body="$CLEAN" --jq .id
+            echo "Scrubbed banned dash characters from comment $ID."
+          else
+            echo "Comment $ID already clean."
+          fi
 
       - name: Submit formal review state
         if: always()
@@ -103,5 +146,32 @@ jobs:
             -X POST \
             -f commit_id="$HEAD_SHA" \
             -f event="$EVENT" \
-            -f body="Formal review state for the Anya review above. See the full findings and suggestion blocks in the review comment."
+            -f body="Formal review state for the Anya review above. See the full findings and suggestion blocks in the review comment." \
             --jq '{id, state}'
+
+      - name: Auto-merge docs-only approvals
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No PR number in event, skipping auto-merge."
+            exit 0
+          fi
+          LATEST=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | .body] | last // ""')
+          if ! printf '%s' "$LATEST" | grep -q 'VERDICT: APPROVE'; then
+            echo "No APPROVE verdict, skipping auto-merge."
+            exit 0
+          fi
+          DOCSONLY=$(gh pr view "$PR" --json files --jq '[.files[].path] | length > 0 and all(test("\\.md$|^docs/|^references/"))')
+          if [ "$DOCSONLY" != "true" ]; then
+            echo "Non-docs files present, skipping auto-merge."
+            exit 0
+          fi
+          gh pr merge "$PR" --auto --squash
+          echo "Auto-merge enabled for docs-only PR #$PR."
