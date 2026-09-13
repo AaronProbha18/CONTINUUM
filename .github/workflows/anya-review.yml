@@ -104,7 +104,7 @@ jobs:
             echo "No PR number in event, skipping scrub."
             exit 0
           fi
-          ID=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | {id, body}] | last | .id // empty')
+          ID=$(gh api "repos/${{ github.repository }}/issues/$PR/comments" --jq '[.[] | select(.user.login == "anya-research") | .id] | last // empty')
           if [ -z "$ID" ]; then
             echo "No Anya comment found, skipping scrub."
             exit 0
