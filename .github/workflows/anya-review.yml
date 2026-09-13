@@ -13,7 +13,10 @@ jobs:
     if: |
       (
         github.event_name == 'pull_request' &&
-        github.event.requested_reviewer.login == 'anya-research'
+        (
+          github.event.action == 'synchronize' ||
+          github.event.requested_reviewer.login == 'anya-research'
+        )
       ) || (
         github.event.comment.user.type == 'User' &&
         startsWith(github.event.comment.body, '/anya review')
