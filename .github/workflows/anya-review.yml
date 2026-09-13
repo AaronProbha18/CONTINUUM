@@ -444,7 +444,7 @@ jobs:
           done
           echo "Reaction cleanup done."
 
-      - name: Auto-merge docs-only approvals
+      - name: Auto-merge approved PRs
         if: always() && steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
@@ -463,10 +463,10 @@ jobs:
             echo "No APPROVED formal review from Anya, skipping auto-merge."
             exit 0
           fi
-          DOCSONLY=$(gh pr view "$PR" --json files --jq '[.files[].path] | length > 0 and all(test("\\.md$|^docs/|^references/"))')
-          if [ "$DOCSONLY" != "true" ]; then
-            echo "Non-docs files present, skipping auto-merge."
+          DOCSONLY=$(gh pr view "$PR" --json files --jq '[.files[].path] | length')
+          if [ "$DOCSONLY" = "0" ]; then
+            echo "No files changed, skipping auto-merge."
             exit 0
           fi
           gh pr merge "$PR" --auto --squash
-          echo "Auto-merge enabled for docs-only PR #$PR."
+          echo "Auto-merge enabled for PR #$PR on Anya approval."
