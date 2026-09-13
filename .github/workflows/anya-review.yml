@@ -6,7 +6,7 @@ on:
   pull_request_review_comment:
     types: [created]
   pull_request:
-    types: [review_requested]
+    types: [review_requested, synchronize]
 
 jobs:
   anya-review:
@@ -25,6 +25,25 @@ jobs:
       pull-requests: write
       issues: write
     steps:
+      - name: Check for prior Anya review on pushes
+        id: gate
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ github.event.action }}" != "synchronize" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          PR="${{ github.event.pull_request.number }}"
+          STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state == "CHANGES_REQUESTED") | .id] | length')
+          if [ "$STATE" != "0" ]; then
+            echo "Prior Anya request-changes stands, re-reviewing push."
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No open Anya findings on this push, standing down."
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
@@ -32,6 +51,7 @@ jobs:
           persist-credentials: false
 
       - name: Wait for required CI
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
@@ -57,6 +77,7 @@ jobs:
           echo "CI wait timed out, proceeding with current statuses."
 
       - name: Run Anya Review
+        if: steps.gate.outputs.run == 'true'
         uses: anomalyco/opencode/github@latest
         env:
           OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
@@ -206,7 +227,7 @@ jobs:
             Never claim checks are pending; read their conclusions.
 
       - name: Scrub banned characters from review text
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         id: scrub
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
@@ -246,7 +267,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Submit formal review with inline findings
-        if: steps.scrub.outputs.comment_id != ''
+        if: steps.scrub.outputs.comment_id != '' && steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
           REVIEW_BODY: ${{ steps.scrub.outputs.cleaned }}
@@ -383,6 +404,7 @@ jobs:
           PYEOF
 
       - name: Remove standalone comment
+        if: steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
@@ -390,7 +412,7 @@ jobs:
           echo "Removed standalone comment, the formal review stands alone."
 
       - name: Remove acknowledgement reactions
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
@@ -423,7 +445,7 @@ jobs:
           echo "Reaction cleanup done."
 
       - name: Auto-merge docs-only approvals
-        if: always()
+        if: always() && steps.gate.outputs.run == 'true'
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
