@@ -110,7 +110,7 @@ jobs:
             exit 0
           fi
           BODY=$(gh api "repos/${{ github.repository }}/issues/comments/$ID" --jq .body)
-          CLEAN=$(printf '%s' "$BODY" | sed -e 's/—/,/g' -e 's/–/-/g')
+          CLEAN=$(printf '%s' "$BODY" | python3 -c "import sys,re; t=sys.stdin.read(); t=re.sub(r'(?m)^\[github run\]\(.*\)\s*', '', t); t=t.replace('—', ',').replace('–', '-'); sys.stdout.write(t.rstrip() + chr(10))")
           if [ "$CLEAN" != "$BODY" ]; then
             gh api "repos/${{ github.repository }}/issues/comments/$ID" -X PATCH -f body="$CLEAN" --jq .id
             echo "Scrubbed banned dash characters from comment $ID."
