@@ -90,17 +90,25 @@ jobs:
             running means ready once CI goes green with nothing else needed;
             open findings mean no readiness claim at all.
 
-            Rules for findings, most severe first:
-            - State the file path and line number in backticks on its own line.
-            - Explain the concrete failure mode in two to four sentences: what
-              happens, where, and why it is wrong in practice.
-            - When the fix is a concrete replacement, append a GitHub suggestion
-              block with ONLY the corrected lines, matching indentation exactly:
+            Rules for findings, most severe first. Write the human-readable
+            summary (thanks, what changed, what you verified, readiness close)
+            as normal prose. Then put every finding ONLY in strict blocks, one
+            per finding, exactly like this and nothing else inside the fences
+            of the block:
 
-            ```suggestion
-            raise OSError(error_msg.format(origin, e.code, e.msg)) from e
-            ```
+            ### FINDING
+            FILE: `src/continuum/state/validator.py`
+            LINE: 142
+            SEVERITY: high
+            BODY:
+            Two to four sentences: what happens, where, why it is wrong.
+            SUGGESTION:
+            The exact replacement lines, or the single word NONE.
 
+            LINE is the new-file line number of the changed line the finding
+            is about. SEVERITY is one of high, medium, or low. The BODY plus
+            suggestion render both inline on that line and inside the formal
+            review, so keep prose findings out of the summary paragraphs.
             - Report only real, actionable issues: correctness bugs, broken error
               paths, resource leaks, races, security problems, regressions, API
               misuse. Never report style nits, naming taste, or anything linters
@@ -156,7 +164,7 @@ jobs:
             echo 'SCRUBEOF'
           } >> "$GITHUB_OUTPUT"
 
-      - name: Submit formal review with full text
+      - name: Submit formal review with inline findings
         if: steps.scrub.outputs.comment_id != ''
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
@@ -171,32 +179,114 @@ jobs:
             echo "No PR number in event, skipping formal review."
             exit 0
           fi
-          if printf '%s' "$REVIEW_BODY" | grep -q 'VERDICT: REQUEST_CHANGES'; then
-            EVENT=REQUEST_CHANGES
-          elif printf '%s' "$REVIEW_BODY" | grep -q 'VERDICT: APPROVE'; then
-            EVENT=APPROVE
-          else
-            echo "No verdict line in review text, skipping formal review."
-            exit 0
-          fi
-          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
           printf '%s' "$REVIEW_BODY" > /tmp/anya_review_body.md
-          ATTEMPT=0
-          until OUT=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
-            -X POST \
-            -f commit_id="$HEAD_SHA" \
-            -f event="$EVENT" \
-            -F body=@/tmp/anya_review_body.md \
-            --jq '{id, state}'); do
-            ATTEMPT=$((ATTEMPT+1))
-            if [ "$ATTEMPT" -ge 4 ]; then
-              echo "Formal review filing failed after retries."
-              exit 1
-            fi
-            echo "Empty API response, retry $ATTEMPT in 20s."
-            sleep 20
-          done
-          echo "$OUT"
+          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          export PR HEAD_SHA
+          python3 - <<'PYEOF'
+          import json, os, re, subprocess
+
+          def sh(*args):
+              r = subprocess.run(args, capture_output=True, text=True)
+              if r.returncode != 0:
+                  raise RuntimeError(' '.join(args) + ': ' + r.stderr[:300])
+              return r.stdout
+
+          repo = os.environ['GITHUB_REPOSITORY'].split('/', 1)
+          owner, name = repo[0], repo[1]
+          pr = os.environ['PR']
+          head_sha = os.environ['HEAD_SHA']
+          text = open('/tmp/anya_review_body.md', encoding='utf-8').read()
+
+          verdict = 'REQUEST_CHANGES' if 'VERDICT: REQUEST_CHANGES' in text else (
+              'APPROVE' if 'VERDICT: APPROVE' in text else '')
+          if not verdict:
+              print('No verdict line, skipping formal review.')
+              raise SystemExit(0)
+
+          # Added-line ranges per file, from the live PR diff.
+          diff = sh('gh', 'pr', 'diff', pr)
+          added, cur, new_line = {}, '', 0
+          for line in diff.splitlines():
+              m = re.match(r'^\+\+\+ b/(.*)$', line)
+              if m:
+                  cur = m.group(1)
+                  added.setdefault(cur, set())
+                  continue
+              m = re.match(r'^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@', line)
+              if m:
+                  new_line = int(m.group(1))
+                  continue
+              if line.startswith('+') and not line.startswith('+++'):
+                  added.setdefault(cur, set()).add(new_line)
+                  new_line += 1
+              elif line.startswith('-') and not line.startswith('---'):
+                  pass
+              else:
+                  new_line += 1
+
+          # Strict finding blocks.
+          findings, summary = [], text
+          if '### FINDING' in text:
+              summary = text.split('### FINDING')[0].rstrip()
+              for chunk in text.split('### FINDING')[1:]:
+                  f = re.search(r'FILE:\s*`?([^`\n]+)`?', chunk)
+                  ln = re.search(r'LINE:\s*(\d+)', chunk)
+                  sv = re.search(r'SEVERITY:\s*(high|medium|low)', chunk, re.I)
+                  bd = re.search(r'BODY:\s*(.*?)\s*SUGGESTION:', chunk, re.S)
+                  sg = re.search(r'SUGGESTION:\s*(.*)$', chunk, re.S)
+                  if not (f and ln and sv and bd and sg):
+                      continue
+                  findings.append({
+                      'file': f.group(1).strip(),
+                      'line': int(ln.group(1)),
+                      'severity': sv.group(1).lower(),
+                      'body': bd.group(1).strip(),
+                      'suggestion': sg.group(1).strip(),
+                  })
+
+          inline, overflow = [], []
+          for f in findings:
+              if f['line'] in added.get(f['file'], set()):
+                  body = '**%s**\n\n%s' % (f['severity'], f['body'])
+                  if f['suggestion'].upper() != 'NONE':
+                      body += '\n\n```suggestion\n%s\n```' % f['suggestion']
+                  inline.append({'path': f['file'], 'line': f['line'],
+                                 'side': 'RIGHT', 'body': body})
+              else:
+                  overflow.append(f)
+          for f in overflow:
+              summary += '\n\n`%s:%d` **%s**\n\n%s' % (
+                  f['file'], f['line'], f['severity'], f['body'])
+              if f['suggestion'].upper() != 'NONE':
+                  summary += '\n\n```suggestion\n%s\n```' % f['suggestion']
+
+          api = lambda *a: sh('gh', 'api', *a)
+          if inline:
+              proc = subprocess.run(
+                  ['gh', 'api', 'repos/%s/%s/pulls/%s/reviews' % (owner, name, pr),
+                   '-X', 'POST', '--input', '-'],
+                  input=json.dumps({'commit_id': head_sha, 'comments': inline}),
+                  capture_output=True, text=True)
+              if proc.returncode != 0:
+                  raise RuntimeError('pending review: ' + proc.stderr[:300])
+              rid = json.loads(proc.stdout)['id']
+              proc = subprocess.run(
+                  ['gh', 'api', 'repos/%s/%s/pulls/%s/reviews/%s/events' % (owner, name, pr, rid),
+                   '-X', 'POST', '--input', '-'],
+                  input=json.dumps({'event': verdict, 'body': summary}),
+                  capture_output=True, text=True)
+              if proc.returncode != 0:
+                  raise RuntimeError('submit review: ' + proc.stderr[:300])
+              print('Filed formal %s with %d inline findings.' % (verdict, len(inline)))
+          else:
+              open('/tmp/anya_summary.md', 'w', encoding='utf-8').write(summary)
+              out = api('repos/%s/%s/pulls/%s/reviews' % (owner, name, pr),
+                        '-X', 'POST', '-f', 'commit_id=' + head_sha,
+                        '-f', 'event=' + verdict, '-F', 'body=@/tmp/anya_summary.md',
+                        '--jq', '{id, state}')
+              print('Filed formal %s without inline findings.' % verdict)
+              print(out.strip()[:120])
+          PYEOF
 
       - name: Remove standalone comment
         env:
