@@ -92,6 +92,7 @@ jobs:
 
       - name: Scrub banned characters from review text
         if: always()
+        id: scrub
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
@@ -117,11 +118,18 @@ jobs:
           else
             echo "Comment $ID already clean."
           fi
+          {
+            echo "comment_id=$ID"
+            echo 'cleaned<<SCRUBEOF'
+            printf '%s\n' "$CLEAN"
+            echo 'SCRUBEOF'
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Submit formal review state
-        if: always()
+      - name: Submit formal review with full text
+        if: steps.scrub.outputs.comment_id != ''
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+          REVIEW_BODY: ${{ steps.scrub.outputs.cleaned }}
         run: |
           set -uo pipefail
           PR="${{ github.event.pull_request.number }}"
@@ -132,22 +140,29 @@ jobs:
             echo "No PR number in event, skipping formal review."
             exit 0
           fi
-          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
-          LATEST=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | .body] | last // ""')
-          if printf '%s' "$LATEST" | grep -q 'VERDICT: REQUEST_CHANGES'; then
+          if printf '%s' "$REVIEW_BODY" | grep -q 'VERDICT: REQUEST_CHANGES'; then
             EVENT=REQUEST_CHANGES
-          elif printf '%s' "$LATEST" | grep -q 'VERDICT: APPROVE'; then
+          elif printf '%s' "$REVIEW_BODY" | grep -q 'VERDICT: APPROVE'; then
             EVENT=APPROVE
           else
-            echo "No verdict line in latest Anya comment, skipping formal review."
+            echo "No verdict line in review text, skipping formal review."
             exit 0
           fi
+          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          printf '%s' "$REVIEW_BODY" > /tmp/anya_review_body.md
           gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
             -X POST \
             -f commit_id="$HEAD_SHA" \
             -f event="$EVENT" \
-            -f body="Formal review state for the Anya review above. See the full findings and suggestion blocks in the review comment." \
+            -F body=@/tmp/anya_review_body.md \
             --jq '{id, state}'
+
+      - name: Remove standalone comment
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          gh api "repos/${{ github.repository }}/issues/comments/${{ steps.scrub.outputs.comment_id }}" -X DELETE
+          echo "Removed standalone comment, the formal review stands alone."
 
       - name: Auto-merge docs-only approvals
         if: always()
@@ -163,9 +178,9 @@ jobs:
             echo "No PR number in event, skipping auto-merge."
             exit 0
           fi
-          LATEST=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | .body] | last // ""')
-          if ! printf '%s' "$LATEST" | grep -q 'VERDICT: APPROVE'; then
-            echo "No APPROVE verdict, skipping auto-merge."
+          STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state != "COMMENTED") | .state] | last // ""')
+          if [ "$STATE" != "APPROVED" ]; then
+            echo "No APPROVED formal review from Anya, skipping auto-merge."
             exit 0
           fi
           DOCSONLY=$(gh pr view "$PR" --json files --jq '[.files[].path] | length > 0 and all(test("\\.md$|^docs/|^references/"))')
