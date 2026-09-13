@@ -80,8 +80,8 @@ jobs:
               tests around them. If evidence is thin, say what is unproven
               instead of guessing.
             - House style, no exceptions: never use em dashes or en dashes
-              (never the characters U+2014 or U+2013 anywhere, not in prose,
-              code, or suggestions). Use commas, periods, or parentheses.
+              anywhere, not in prose, code, or suggestions (banned codepoints
+              U+2014 and U+2013). Use commas, periods, or parentheses.
               Never use emojis. Keep it under 600 words unless findings demand
               more.
 
