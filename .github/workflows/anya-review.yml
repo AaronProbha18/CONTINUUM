@@ -24,6 +24,8 @@ jobs:
       contents: read
       pull-requests: write
       issues: write
+    env:
+      GH_REPO: ${{ github.repository }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
