@@ -53,13 +53,13 @@ CONTINUUM 提出一个更窄但更难的问题：智能体能否从任务状态�
 
 ## 快速开始
 
-以 `continuum-agent` 0.1.0 发布至 PyPI，执行 `pip install continuum-agent` 即可（固定版本请用 `pip install continuum-agent==0.1.0`）。发布标签还会将构建好的 wheel 附加到 [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases)。
+以 `continuum-agent` 0.1.2 发布至 PyPI，执行 `pip install continuum-agent` 即可（固定版本请用 `pip install continuum-agent==0.1.2`）。发布标签还会将构建好的 wheel 附加到 [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases)。
 
 零配置路径（无需克隆、无需安装、无需发布）：
 
 | 路径 | 方法 |
 |:--|:--|
-| 从 PyPI 安装 | `pip install continuum-agent==0.1.0`，然后执行 `continuum --help` |
+| 从 PyPI 安装 | `pip install continuum-agent==0.1.2`，然后执行 `continuum --help` |
 | 端到端观看崩溃恢复 | `docker run --rm ghcr.io/cyrax321/continuum` |
 | 通过 Docker 使用 CLI | `docker run --rm ghcr.io/cyrax321/continuum continuum --help` |
 | 无需克隆即可运行 CLI | `uvx --from git+https://github.com/Cyrax321/CONTINUUM.git continuum --help` |
@@ -498,7 +498,7 @@ CONTINUUM 位于持久执行、幂等副作用追踪和针对 LLM 智能体的�
 ## 状态与局限
 
 - **已测试**：在 2026-08-24 对本树的完整运行中为 1,360 通过 + 23 跳过，CI 在 Python 3.11、3.12 和 3.13 上强制执行套件，计数因平台和 Postgres 等可选服务而异（见 [STATUS.md](STATUS.md)）。MCP 面也已在真实协议上被对抗性审计，见 [test.md](test.md)。
-- **在 PyPI 上为 `continuum-agent` 0.1.0**（`pip install continuum-agent`，克隆仍可通过 `pip install .` 见 Quick Start）。
+- **在 PyPI 上为 `continuum-agent` 0.1.2**（`pip install continuum-agent`，克隆仍可通过 `pip install .` 见 Quick Start）。
 - **MCP 调用者认证按部署可选。** 当设置 `CONTINUUM_MCP_TOKEN` 时，服务器会拒绝每个变更工具，除非调用者在 `initialize` 握手的 `_meta.authToken` 中出示该共享密钥，通过 `CONTINUUM_MCP_CLIENT_TOKENS`（`name:secret` 对）支持按调用者的密钥。未配置任何 token 时，鉴权仅按声明身份（历史默认值，为本地单用户使用保留）。
 - **通过 MCP 确认自我报告状态需要单独的密钥。** `continuum_confirm` 会拒绝每个调用者，直至操作员设置 `CONTINUUM_MCP_CONFIRM_TOKEN`，因为被允许记录进度的智能体不能同时被允许确认它。默认路径保持人类驱动：在主机上运行 `continuum confirm <run_id>`。
 - **未构建组件**：云 API（阶段 13）。
