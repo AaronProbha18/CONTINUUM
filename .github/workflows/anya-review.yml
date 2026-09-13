@@ -83,7 +83,7 @@ jobs:
             Never narrate your own environment, tooling, or access limits.
             No sentences about missing binaries, checkouts, runners, sandboxes,
             or what you could not run. If a check lives in CI rather than your
-hands, read its status from the PR and say that plainly, for example
+            hands, read its status from the PR and say that plainly, for example
             that lint and type-check are green while the test matrix is still
             running. Close to match reality: all verified plus required checks
             green means ready to merge now; all verified with checks still
