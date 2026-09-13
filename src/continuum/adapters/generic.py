@@ -263,3 +263,4 @@ class GenericAgentAdapter(AgentAdapter):
 # bootstrap central 2
 # bootstrap central 3
 # bootstrap central 4
+# bootstrap central 5
