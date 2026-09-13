@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _pyproject_version() -> str:
-    text = (ROOT / "pyproject.toml").read_text()
+    text = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     m = re.search(r'version\s*=\s*"([^"]+)"', text)
     assert m, "no version in pyproject.toml"
     return m.group(1)
@@ -24,7 +24,7 @@ def test_pyproject_version_matches_package():
 
 def test_readme_pins_match_pyproject():
     v = _pyproject_version()
-    readme = (ROOT / "README.md").read_text()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"continuum-agent=={v}" in readme
 
 
