@@ -121,9 +121,10 @@ jobs:
             The exact replacement lines, or the single word NONE.
 
             LINE is the new-file line number of the changed line the finding
-            is about. SEVERITY is one of high, medium, or low. The BODY plus
-            suggestion render both inline on that line and inside the formal
-            review, so keep prose findings out of the summary paragraphs.
+            is about. SEVERITY is routing only and is never shown to readers.
+            SUGGESTION holds raw replacement code lines only: no fences, no
+            prose, no labels, no verdict text, nothing that is not code. A
+            human taps apply on it, so anything extra lands in the codebase.
             - Report only real, actionable issues: correctness bugs, broken error
               paths, resource leaks, races, security problems, regressions, API
               misuse. Never report style nits, naming taste, or anything linters
@@ -145,7 +146,8 @@ jobs:
             Finish with exactly one verdict line and nothing after it:
             VERDICT: APPROVE when no high or medium findings remain, or
             VERDICT: REQUEST_CHANGES when any high or medium finding stands.
-            Low severity findings never block approval.
+            Low severity findings never block approval. The verdict line is
+            routing only: it is stripped before filing and never shown.
 
       - name: Scrub banned characters from review text
         if: always()
@@ -169,6 +171,10 @@ jobs:
           fi
           BODY=$(gh api "repos/${{ github.repository }}/issues/comments/$ID" --jq .body)
           CLEAN=$(printf '%s' "$BODY" | python3 -c "import sys,re; t=sys.stdin.read(); t=re.sub(r'(?m)^\[github run\]\(.*\)\s*', '', t); t=t.replace('—', ',').replace('–', '-'); sys.stdout.write(t.rstrip() + chr(10))")
+          if printf '%s' "$CLEAN" | grep -q 'VERDICT: REQUEST_CHANGES'; then VERDICT_OUT=REQUEST_CHANGES
+          elif printf '%s' "$CLEAN" | grep -q 'VERDICT: APPROVE'; then VERDICT_OUT=APPROVE
+          else VERDICT_OUT=""; fi
+          CLEAN=$(printf '%s' "$CLEAN" | python3 -c "import sys,re; t=sys.stdin.read(); t=re.sub(r'(?m)^VERDICT: (APPROVE|REQUEST_CHANGES)\s*', '', t); sys.stdout.write(t.rstrip() + chr(10))")
           if [ "$CLEAN" != "$BODY" ]; then
             gh api "repos/${{ github.repository }}/issues/comments/$ID" -X PATCH -f body="$CLEAN" --jq .id
             echo "Scrubbed banned dash characters from comment $ID."
@@ -177,6 +183,7 @@ jobs:
           fi
           {
             echo "comment_id=$ID"
+            echo "verdict=$VERDICT_OUT"
             echo 'cleaned<<SCRUBEOF'
             printf '%s\n' "$CLEAN"
             echo 'SCRUBEOF'
@@ -187,6 +194,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
           REVIEW_BODY: ${{ steps.scrub.outputs.cleaned }}
+          VERDICT_IN: ${{ steps.scrub.outputs.verdict }}
         run: |
           set -uo pipefail
           PR="${{ github.event.pull_request.number }}"
@@ -215,10 +223,9 @@ jobs:
           head_sha = os.environ['HEAD_SHA']
           text = open('/tmp/anya_review_body.md', encoding='utf-8').read()
 
-          verdict = 'REQUEST_CHANGES' if 'VERDICT: REQUEST_CHANGES' in text else (
-              'APPROVE' if 'VERDICT: APPROVE' in text else '')
-          if not verdict:
-              print('No verdict line, skipping formal review.')
+          verdict = os.environ.get('VERDICT_IN', '').strip()
+          if verdict not in ('APPROVE', 'REQUEST_CHANGES'):
+              print('No verdict recorded, skipping formal review.')
               raise SystemExit(0)
 
           # Added-line ranges per file, from the live PR diff.
@@ -262,21 +269,34 @@ jobs:
                       'suggestion': sg.group(1).strip(),
                   })
 
+          def clean_suggestion(raw):
+              lines = []
+              for ln in raw.splitlines():
+                  s = ln.strip()
+                  if re.match(r'^```', s):
+                      continue
+                  if re.match(r'^(VERDICT|SEVERITY)\s*:', s, re.I):
+                      continue
+                  if s.lower() in ('high', 'medium', 'low', 'none'):
+                      continue
+                  lines.append(ln)
+              return '\n'.join(lines).strip()
+
           inline, overflow = [], []
           for f in findings:
+              sugg = clean_suggestion(f['suggestion'])
               if f['line'] in added.get(f['file'], set()):
-                  body = '**%s**\n\n%s' % (f['severity'], f['body'])
-                  if f['suggestion'].upper() != 'NONE':
-                      body += '\n\n```suggestion\n%s\n```' % f['suggestion']
+                  body = f['body']
+                  if sugg:
+                      body += '\n\n```suggestion\n%s\n```' % sugg
                   inline.append({'path': f['file'], 'line': f['line'],
                                  'side': 'RIGHT', 'body': body})
               else:
-                  overflow.append(f)
-          for f in overflow:
-              summary += '\n\n`%s:%d` **%s**\n\n%s' % (
-                  f['file'], f['line'], f['severity'], f['body'])
-              if f['suggestion'].upper() != 'NONE':
-                  summary += '\n\n```suggestion\n%s\n```' % f['suggestion']
+                  overflow.append((f, sugg))
+          for f, sugg in overflow:
+              summary += '\n\n`%s:%d`\n\n%s' % (f['file'], f['line'], f['body'])
+              if sugg:
+                  summary += '\n\n```suggestion\n%s\n```' % sugg
 
           api = lambda *a: sh('gh', 'api', *a)
           if inline:
