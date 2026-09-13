@@ -62,6 +62,17 @@ jobs:
             exit 0
           fi
           if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "synchronize" ]; then
+            HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+            LAST_REVIEW=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state != "COMMENTED" and .state != "DISMISSED")] | last // empty')
+            if [ -n "$LAST_REVIEW" ]; then
+              REVIEW_SHA=$(printf '%s' "$LAST_REVIEW" | jq -r .commit_id)
+              REVIEW_STATE=$(printf '%s' "$LAST_REVIEW" | jq -r .state)
+              if [ "$REVIEW_SHA" = "$HEAD_SHA" ]; then
+                echo "Anya already filed $REVIEW_STATE on this head, standing down."
+                echo "run=false" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+            fi
             STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state == "CHANGES_REQUESTED") | .id] | length')
             if [ "$STATE" != "0" ]; then
               echo "Prior Anya request-changes stands, re-reviewing push."
@@ -434,6 +445,27 @@ jobs:
         run: |
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.scrub.outputs.comment_id }}" -X DELETE
           echo "Removed standalone comment, the formal review stands alone."
+
+      - name: Resolve own addressed threads on approve
+        if: steps.gate.outputs.run == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state != "COMMENTED" and .state != "DISMISSED")] | last | .state // ""')
+          if [ "$STATE" != "APPROVED" ]; then
+            echo "Latest Anya review is not an approval, leaving threads alone."
+            exit 0
+          fi
+          IDS=$(gh api graphql -f query='query($o:String!,$r:String!,$n:Int!){repository(owner:$o,name:$r){pullRequest(number:$n){reviewThreads(first:50){nodes{id,isResolved,comments(first:1){nodes{author{login}}}}}}}}' -f o="${{ github.repository_owner }}" -f r="${{ github.event.repository.name }}" -F n="$PR" --jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false and .comments.nodes[0].author.login == "anya-research") | .id] | .[]')
+          for TID in $IDS; do
+            gh api graphql -f query='mutation($id:ID!){resolveReviewThread(input:{threadId:$id}){thread{isResolved}}}' -f id="$TID" --jq .data.resolveReviewThread.thread.isResolved
+          done
+          echo "Resolved own addressed threads."
 
       - name: Remove acknowledgement reactions
         if: always() && steps.gate.outputs.run == 'true'
