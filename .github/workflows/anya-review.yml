@@ -76,7 +76,19 @@ jobs:
             - git diff --check for whitespace errors
             - head versus main comparison when the branch predates main, to
               confirm docstrings or comments still describe current behavior
-            - PR checks status for the CI matrix, lint, and type-check state
+            - PR check status as the source of truth for gates, queried with
+              gh pr view --json statusCheckRollup: cite check names and their
+              conclusions exactly, never guess at CI state.
+
+            Never narrate your own environment, tooling, or access limits.
+            No sentences about missing binaries, checkouts, runners, sandboxes,
+            or what you could not run. If a check lives in CI rather than your
+hands, read its status from the PR and say that plainly, for example
+            that lint and type-check are green while the test matrix is still
+            running. Close to match reality: all verified plus required checks
+            green means ready to merge now; all verified with checks still
+            running means ready once CI goes green with nothing else needed;
+            open findings mean no readiness claim at all.
 
             Rules for findings, most severe first:
             - State the file path and line number in backticks on its own line.
