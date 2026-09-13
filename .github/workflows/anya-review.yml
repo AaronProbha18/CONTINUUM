@@ -30,19 +30,38 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ] || [ "${{ github.event.action }}" != "synchronize" ]; then
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
             echo "run=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          PR="${{ github.event.pull_request.number }}"
-          STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state == "CHANGES_REQUESTED") | .id] | length')
-          if [ "$STATE" != "0" ]; then
-            echo "Prior Anya request-changes stands, re-reviewing push."
-            echo "run=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No open Anya findings on this push, standing down."
+          MERGEABLE=$(gh pr view "$PR" --json mergeable --jq .mergeable)
+          if [ "$MERGEABLE" = "CONFLICTING" ]; then
+            LAST=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | .body] | last // ""')
+            if printf '%s' "$LAST" | grep -q 'conflicts with main'; then
+              echo "Conflict note already posted, standing down."
+            else
+              gh pr comment "$PR" --body "Thanks for the work here. This branch currently conflicts with main, so a review now would cover a diff that is not what would merge. Please rebase onto latest main and resolve the conflicts, then ping me back here and I will take it from the top."
+              echo "Posted conflict note on #$PR."
+            fi
             echo "run=false" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          if [ "${{ github.event_name }}" = "pull_request" ] && [ "${{ github.event.action }}" = "synchronize" ]; then
+            STATE=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" --jq '[.[] | select(.user.login == "anya-research" and .state == "CHANGES_REQUESTED") | .id] | length')
+            if [ "$STATE" != "0" ]; then
+              echo "Prior Anya request-changes stands, re-reviewing push."
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "No open Anya findings on this push, standing down."
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+            exit 0
+          fi
+          echo "run=true" >> "$GITHUB_OUTPUT"
 
       - name: Checkout repository
         uses: actions/checkout@v7
