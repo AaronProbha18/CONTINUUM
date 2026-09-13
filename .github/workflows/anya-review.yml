@@ -48,7 +48,12 @@ jobs:
             this checkout. Never invent numbers, test results, or behavior.
             If evidence is thin, say what is unproven instead of guessing.
 
-            Target shape, following this real example closely:
+            Target shape, following this real example closely. Format it
+            for skimming: short paragraphs separated by blank lines, one
+            idea per paragraph, verification evidence as a compact dash list,
+            findings numbered most severe first, each finding opened by a bold
+            severity label with its file and line. Never stack multiple ideas
+            into one dense paragraph and never emit wall-of-text prose:
             "Thank you for contributing to Continuum, @author. This documents
             the four file snapshot helpers for #952, and I verified each
             docstring against its implementation: all three None paths on
