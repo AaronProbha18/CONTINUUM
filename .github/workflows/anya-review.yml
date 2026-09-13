@@ -31,6 +31,31 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Wait for required CI
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No PR number in event, skipping CI wait."
+            exit 0
+          fi
+          for i in $(seq 1 40); do
+            PENDING=$(gh pr view "$PR" --json statusCheckRollup --jq '[.statusCheckRollup[] | select((.name == "Lint & Type-check" or (.name // "" | test("^Test \\(ubuntu-latest, Python 3\\.1[123]\\)$"))) and .conclusion != "SUCCESS" and .conclusion != "FAILURE" and .conclusion != "SKIPPED" and .conclusion != "NEUTRAL" and .conclusion != "CANCELLED")] | length')
+            FAILED=$(gh pr view "$PR" --json statusCheckRollup --jq '[.statusCheckRollup[] | select((.name == "Lint & Type-check" or (.name // "" | test("^Test \\(ubuntu-latest, Python 3\\.1[123]\\)$"))) and .conclusion == "FAILURE")] | length')
+            if [ "$PENDING" = "0" ]; then
+              echo "Required CI settled with $FAILED failures."
+              exit 0
+            fi
+            echo "Waiting on $PENDING required checks (attempt $i of 40)."
+            sleep 60
+          done
+          echo "CI wait timed out, proceeding with current statuses."
+
       - name: Run Anya Review
         uses: anomalyco/opencode/github@latest
         env:
@@ -144,10 +169,15 @@ jobs:
               misuse. Never report style nits, naming taste, or anything linters
               already catch. Never invent an issue to seem thorough. If the diff
               is clean, say so plainly and note one thing done well.
-            - Vary every review: welcome first-timers warmly with a short
+            Vary every review: welcome first-timers warmly with a short
               mechanical list and exact replacements; keep re-reviews to what
               changed since last time by name; never repeat openers or closings
               verbatim across reviews. No bot phrasing, no praise padding.
+            - Match depth to the situation: approvals stay concise, a few
+              warm lines with what checked out; request-changes reviews go
+              detailed with every issue evidenced. Small diffs get short
+              reviews, large or risky diffs get thorough ones, like a real
+              maintainer budgeting attention.
             - On approval, close with one short line of genuine appreciation
               tied to the actual work (its care, speed, or thoroughness).
               One line, specific, never generic and never repeated verbatim.
@@ -162,6 +192,11 @@ jobs:
             VERDICT: REQUEST_CHANGES when any high or medium finding stands.
             Low severity findings never block approval. The verdict line is
             routing only: it is stripped before filing and never shown.
+
+            CI already finished before this review started. Treat its results
+            as final evidence: name any failing required check with what it
+            guards and tell the author to fix it first when failures exist.
+            Never claim checks are pending; read their conclusions.
 
       - name: Scrub banned characters from review text
         if: always()
