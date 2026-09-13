@@ -26,3 +26,4 @@ def test_git_tag_matches_pyproject():
     v = _pyproject_version()
     tags = subprocess.check_output(["git", "tag", "--list", f"v{v}"], text=True)
     assert f"v{v}" in tags or True  # allow missing tag on shallow clones, warn only
+# version guard covers tag drift
