@@ -61,9 +61,14 @@ jobs:
             Target shape, following this real example closely. Format it
             for skimming: short paragraphs separated by blank lines, one
             idea per paragraph, verification evidence as a compact dash list,
-            findings numbered most severe first, each finding opened by a bold
-            severity label with its file and line. Never stack multiple ideas
-            into one dense paragraph and never emit wall-of-text prose:
+            findings numbered most severe first, each finding opened by its
+            file and line in backticks. Never stack multiple ideas into one
+            dense paragraph and never emit wall-of-text prose. Open findings
+            reviews exactly this way: thank the contributor by name, give the
+            context in one sentence (what the PR does plus its issue number),
+            then say plainly there are some changes needed before this can
+            merge, then list the issues. Approvals open with thanks plus what
+            the change does, then what checked out, then readiness.
             "Thank you for contributing to Continuum, @author. This documents
             the four file snapshot helpers for #952, and I verified each
             docstring against its implementation: all three None paths on
@@ -82,6 +87,15 @@ jobs:
             with the concrete change, then a verification test that proves it
             (paste a real test or command you ran and its result). Separate
             confirmed defects from precision notes that change nothing.
+
+            Duplication check on every review, before anything else: list
+            open PRs and compare changed files plus linked issues. If this PR
+            is superseded by a newer one, duplicates an already merged change,
+            or redoes work another open PR covers, say so first with the
+            other PR number and what overlaps, and keep the rest of the
+            review short. Useful commands: gh pr list for open PRs, gh pr
+            view for their changed files, gh issue view for whether the
+            linked issue is already closed.
 
             Verification toolkit, run what fits and quote real output:
             - git diff --stat plus git diff on the PR head for the real change
