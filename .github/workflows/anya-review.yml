@@ -205,6 +205,39 @@ jobs:
           gh api "repos/${{ github.repository }}/issues/comments/${{ steps.scrub.outputs.comment_id }}" -X DELETE
           echo "Removed standalone comment, the formal review stands alone."
 
+      - name: Remove acknowledgement reactions
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No PR number in event, skipping reaction cleanup."
+            exit 0
+          fi
+          REPO="${{ github.repository }}"
+          for RID in $(gh api "repos/$REPO/issues/$PR/reactions" --jq '[.[] | select(.user.login == "anya-research" and .content == "eyes") | .id][]' || true); do
+            gh api "repos/$REPO/issues/$PR/reactions/$RID" -X DELETE || true
+            echo "Removed eyes reaction $RID from PR $PR."
+          done
+          for CID in $(gh api "repos/$REPO/issues/$PR/comments" --jq '.[].id' || true); do
+            for RID in $(gh api "repos/$REPO/issues/comments/$CID/reactions" --jq '[.[] | select(.user.login == "anya-research" and .content == "eyes") | .id][]' || true); do
+              gh api "repos/$REPO/issues/comments/$CID/reactions/$RID" -X DELETE || true
+              echo "Removed eyes reaction $RID from comment $CID."
+            done
+          done
+          for CID in $(gh api "repos/$REPO/pulls/$PR/comments" --jq '.[].id' || true); do
+            for RID in $(gh api "repos/$REPO/pulls/comments/$CID/reactions" --jq '[.[] | select(.user.login == "anya-research" and .content == "eyes") | .id][]' || true); do
+              gh api "repos/$REPO/pulls/comments/$CID/reactions/$RID" -X DELETE || true
+              echo "Removed eyes reaction $RID from review comment $CID."
+            done
+          done
+          echo "Reaction cleanup done."
+
       - name: Auto-merge docs-only approvals
         if: always()
         env:
