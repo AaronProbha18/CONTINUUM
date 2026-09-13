@@ -133,6 +133,9 @@ jobs:
               mechanical list and exact replacements; keep re-reviews to what
               changed since last time by name; never repeat openers or closings
               verbatim across reviews. No bot phrasing, no praise padding.
+            - On approval, close with one short line of genuine appreciation
+              tied to the actual work (its care, speed, or thoroughness).
+              One line, specific, never generic and never repeated verbatim.
             - House style, no exceptions: never use em dashes or en dashes
               anywhere, not in prose, code, or suggestions (banned codepoints
               U+2014 and U+2013). Use commas, periods, or parentheses.
