@@ -54,13 +54,13 @@ CONTINUUM은 더 좁고 더 어려운 질문을 던진다. 에이전트가 작�
 
 ## 빠른 시작
 
-PyPI에 `continuum-agent` 0.1.0으로 게시됨. `pip install continuum-agent` 실행 (`pip install continuum-agent==0.1.0`으로 고정). 릴리스 태그는 빌드된 wheel을 [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases)에 첨부한다.
+PyPI에 `continuum-agent` 0.1.2으로 게시됨. `pip install continuum-agent` 실행 (`pip install continuum-agent==0.1.2`으로 고정). 릴리스 태그는 빌드된 wheel을 [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases)에 첨부한다.
 
 제로 설정 경로 (클론도, 설치도, 게시도 필요 없음):
 
 | 경로 | 방법 |
 |:--|:--|
-| PyPI에서 설치 | `pip install continuum-agent==0.1.0` 후 `continuum --help` |
+| PyPI에서 설치 | `pip install continuum-agent==0.1.2` 후 `continuum --help` |
 | 크래시 복구를 끝에서 끝까지 보기 | `docker run --rm ghcr.io/cyrax321/continuum` |
 | Docker를 통해 CLI 사용 | `docker run --rm ghcr.io/cyrax321/continuum continuum --help` |
 | 클론 없이 CLI 실행 | `uvx --from git+https://github.com/Cyrax321/CONTINUUM.git continuum --help` |
@@ -499,7 +499,7 @@ CONTINUUM은 내구성 있는 실행, 멱등한 사이드 이펙트 추적, LLM 
 ## 상태와 제한
 
 - **테스트됨**: 이 트리의 2026-08-24 감사에서 완전한 실행으로 1,360 통과 + 23 스킵. CI는 Python 3.11, 3.12, 3.13에서 스위트를 강제하며, 카운트는 플랫폼과 Postgres 같은 선택적 서비스에 따라 다르다([STATUS.md](STATUS.md) 참조). MCP 표면도 라이브 프로토콜 위에서 적대적으로 감사되었다. [test.md](test.md) 참조.
-- **PyPI에서 `continuum-agent` 0.1.0**(`pip install continuum-agent`, 클론은 `pip install .`로 여전히 동작. 빠른 시작 참조).
+- **PyPI에서 `continuum-agent` 0.1.2**(`pip install continuum-agent`, 클론은 `pip install .`로 여전히 동작. 빠른 시작 참조).
 - **MCP 호출자 인증은 배포별로 선택 사항.** `CONTINUUM_MCP_TOKEN`이 설정되면, 서버는 호출자가 `initialize` 핸드셰이크의 `_meta.authToken`에서 그 공유 비밀을 제시하지 않는 한 모든 변경 도구를 거부한다. 호출자별 비밀은 `CONTINUUM_MCP_CLIENT_TOKENS`(`name:secret` 쌍)를 통해 이용 가능하다. 토큰이 아무것도 설정되지 않으면, 인가는 선언된 아이덴티티のみ에 의한다(역사적 기본값, 로컬 단일 사용자 사용을 위해 유지).
 - **MCP를 통해 자체 보고된 상태를 확인하려면 별도의 비밀이 필요하다.** `continuum_confirm`은 운영자가 `CONTINUUM_MCP_CONFIRM_TOKEN`을 설정할 때까지 모든 호출자를 거부한다. 진행 상황을 기록하도록 허용된 에이전트가 그것을 확인하는 것도 허용되어서는 안 되기 때문이다. 기본 경로는 인간이 이끄는 채로 유지된다. 호스트에서 `continuum confirm <run_id>`를 실행하라.
 - **구축되지 않은 컴포넌트**: 클라우드 API(단계 13).

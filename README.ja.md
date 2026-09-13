@@ -54,13 +54,13 @@ CONTINUUM はより狭く、より難しい問いを立てます。エージェ�
 
 ## クイックスタート
 
-PyPI に `continuum-agent` 0.1.0 として公開。`pip install continuum-agent` を実行（固定する場合は `pip install continuum-agent==0.1.0`）。リリースタグではビルド済み wheel が [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases) に添付される。
+PyPI に `continuum-agent` 0.1.2 として公開。`pip install continuum-agent` を実行（固定する場合は `pip install continuum-agent==0.1.2`）。リリースタグではビルド済み wheel が [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases) に添付される。
 
 ゼロセットアップのパス（クローンもインストールも公開も不要）：
 
 | パス | 方法 |
 |:--|:--|
-| PyPI からインストール | `pip install continuum-agent==0.1.0` してから `continuum --help` |
+| PyPI からインストール | `pip install continuum-agent==0.1.2` してから `continuum --help` |
 | クラッシュリカバリを端から端まで見る | `docker run --rm ghcr.io/cyrax321/continuum` |
 | Docker 経由で CLI を使う | `docker run --rm ghcr.io/cyrax321/continuum continuum --help` |
 | クローンせずに CLI を実行 | `uvx --from git+https://github.com/Cyrax321/CONTINUUM.git continuum --help` |
@@ -499,7 +499,7 @@ CONTINUUM は耐久実行、冪等な副作用追跡、LLM エージェントの
 ## ステータスと制限
 
 - **テスト済み**：このツリーの 2026-08-24 監査での完全な実行で 1,360 合格 + 23 スキップ。CI は Python 3.11、3.12、3.13 でスイートを強制し、カウントはプラットフォームや Postgres などのオプションサービスにより異なる（[STATUS.md](STATUS.md) を参照）。MCP 面もライブプロトコル上で敵対的に監査済み。[test.md](test.md) を参照。
-- **PyPI では `continuum-agent` 0.1.0**（`pip install continuum-agent`、クローンは `pip install .` で依然として動作。クイックスタートを参照）。
+- **PyPI では `continuum-agent` 0.1.2**（`pip install continuum-agent`、クローンは `pip install .` で依然として動作。クイックスタートを参照）。
 - **MCP 呼び出し元認証はデプロイごとに任意。** `CONTINUUM_MCP_TOKEN` が設定されているとき、サーバーは呼び出し元が `initialize` ハンドシェイクの `_meta.authToken` でその共有秘密を提示しない限り、すべての変更ツールを拒否する。呼び出し元ごとの秘密は `CONTINUUM_MCP_CLIENT_TOKENS`（`name:secret` ペア）経由で利用可能。トークンが何も設定されていない場合、認可は宣言されたアイデンティティのみによる（歴史的なデフォルト、ローカルな単一ユーザー利用のために保持）。
 - **MCP 経由で自己報告された状態を確認するには別の秘密が必要。** `continuum_confirm` はオペレーターが `CONTINUUM_MCP_CONFIRM_TOKEN` を設定するまで、すべての呼び出し元を拒否する。進捗を記録することを許されたエージェントがそれを確認することも許されてはならないからである。デフォルトのパスは人間に導かれたままである。ホストで `continuum confirm <run_id>` を実行する。
 - **未構築のコンポーネント**：クラウド API（フェーズ 13）。

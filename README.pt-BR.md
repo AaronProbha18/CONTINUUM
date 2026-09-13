@@ -55,13 +55,13 @@ O CONTINUUM faz uma pergunta mais estreita e mais difícil: um agente pode retom
 
 ## Início rápido
 
-Publicado no PyPI como `continuum-agent` 0.1.0, execute `pip install continuum-agent` (`pip install continuum-agent==0.1.0` para fixar a versão). As tags de release também anexam wheels construídos em [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases).
+Publicado no PyPI como `continuum-agent` 0.1.2, execute `pip install continuum-agent` (`pip install continuum-agent==0.1.2` para fixar a versão). As tags de release também anexam wheels construídos em [GitHub Releases](https://github.com/Cyrax321/CONTINUUM/releases).
 
 Caminhos sem configuração (sem clonar, sem instalar, sem publicar nada):
 
 | Caminho | Como |
 |:--|:--|
-| Instalar do PyPI | `pip install continuum-agent==0.1.0` e depois `continuum --help` |
+| Instalar do PyPI | `pip install continuum-agent==0.1.2` e depois `continuum --help` |
 | Ver a recuperação de falha de ponta a ponta | `docker run --rm ghcr.io/cyrax321/continuum` |
 | Usar a CLI via Docker | `docker run --rm ghcr.io/cyrax321/continuum continuum --help` |
 | Executar a CLI sem clonar | `uvx --from git+https://github.com/Cyrax321/CONTINUUM.git continuum --help` |
@@ -500,7 +500,7 @@ O CONTINUUM se situa na interseção de execução durável, rastreamento idempo
 ## Status e limitações
 
 - **Testado**: 1,360 passados + 23 pulados em uma execução completa na auditoria de 2026-08-24 desta árvore, CI impõe a suíte em Python 3.11, 3.12 e 3.13, e as contagens variam por plataforma e serviços opcionais como Postgres (ver [STATUS.md](STATUS.md)). A superfície MCP também foi auditada de forma adversarial sobre o protocolo ao vivo, ver [test.md](test.md).
-- **No PyPI como `continuum-agent` 0.1.0** (`pip install continuum-agent`, o clone ainda funciona via `pip install .` ver Início rápido).
+- **No PyPI como `continuum-agent` 0.1.2** (`pip install continuum-agent`, o clone ainda funciona via `pip install .` ver Início rápido).
 - **Autenticação de chamador MCP é opcional por implantação.** Quando `CONTINUUM_MCP_TOKEN` é definido, o servidor recusa cada ferramenta mutante a menos que o chamador apresente esse segredo compartilhado no `_meta.authToken` do handshake `initialize`, segredos por chamador disponíveis via `CONTINUUM_MCP_CLIENT_TOKENS` (pares `name:secret`). Sem nenhum token configurado, a autorização é apenas por identidade declarada (o valor histórico padrão, preservado para uso local de usuário único).
 - **Confirmar estado auto reportado via MCP requer um segredo separado.** `continuum_confirm` recusa cada chamador até que o operador defina `CONTINUUM_MCP_CONFIRM_TOKEN`, porque um agente com permissão para registrar progresso não deve também ter permissão para confirmá-lo. O caminho padrão permanece conduzido por humano: execute `continuum confirm <run_id>` no host.
 - **Componentes não construídos**: API na nuvem (Fase 13).
