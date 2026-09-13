@@ -170,12 +170,22 @@ jobs:
           fi
           HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
           printf '%s' "$REVIEW_BODY" > /tmp/anya_review_body.md
-          gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
+          ATTEMPT=0
+          until OUT=$(gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
             -X POST \
             -f commit_id="$HEAD_SHA" \
             -f event="$EVENT" \
             -F body=@/tmp/anya_review_body.md \
-            --jq '{id, state}'
+            --jq '{id, state}'); do
+            ATTEMPT=$((ATTEMPT+1))
+            if [ "$ATTEMPT" -ge 4 ]; then
+              echo "Formal review filing failed after retries."
+              exit 1
+            fi
+            echo "Empty API response, retry $ATTEMPT in 20s."
+            sleep 20
+          done
+          echo "$OUT"
 
       - name: Remove standalone comment
         env:
