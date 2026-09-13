@@ -3,20 +3,45 @@ name: CI
 on:
   push:
     branches: [main, develop]
-    paths-ignore:
-      - '**.md'
   pull_request:
     branches: [main, develop]
-    paths-ignore:
-      - '**.md'
 
+# NOTE: docs-only PRs must still report every required check. Workflow-level
+# paths-ignore was tried and reverted: a fully filtered workflow posts no
+# statuses at all, so required checks pend forever as Expected. Instead the
+# detect job below computes docs-only and each heavy job skips itself with
+# an if condition, which GitHub reports as skipped and the merge gate
+# accepts.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  detect:
+    name: Detect docs-only change
+    runs-on: ubuntu-latest
+    outputs:
+      docs-only: ${{ steps.check.outputs.docs-only }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: check
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "docs-only=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if git diff --quiet "origin/${{ github.base_ref }}...HEAD" -- . ':!*.md'; then
+            echo "docs-only=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs-only=false" >> "$GITHUB_OUTPUT"
+          fi
+
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
+    needs: detect
+    if: needs.detect.outputs.docs-only != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -48,6 +73,8 @@ jobs:
 
   test-postgres:
     name: Test (Postgres backend)
+    needs: detect
+    if: needs.detect.outputs.docs-only != 'true'
     runs-on: ubuntu-latest
 
     services:
@@ -84,6 +111,8 @@ jobs:
 
   lint:
     name: Lint & Type-check
+    needs: detect
+    if: needs.detect.outputs.docs-only != 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -113,7 +142,8 @@ jobs:
   # Follow-up #837 tracks the remaining gaps: non-editable installs only on
   # ubuntu, POSIX-only temp paths, and no console-script handshake.
   build-wheel:
-    if: github.repository == 'Cyrax321/CONTINUUM'
+    if: github.repository == 'Cyrax321/CONTINUUM' && needs.detect.outputs.docs-only != 'true'
+    needs: detect
     name: Build wheel artifact
     runs-on: ubuntu-latest
 
