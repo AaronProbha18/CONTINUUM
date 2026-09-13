@@ -16,3 +16,8 @@ def _pyproject_version() -> str:
 def test_pyproject_version_matches_package():
     import continuum
     assert continuum.__version__ == _pyproject_version()
+
+def test_readme_pins_match_pyproject():
+    v = _pyproject_version()
+    readme = (ROOT / "README.md").read_text()
+    assert f"continuum-agent=={v}" in readme
