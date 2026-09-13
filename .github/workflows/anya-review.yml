@@ -5,13 +5,20 @@ on:
     types: [created]
   pull_request_review_comment:
     types: [created]
+  pull_request:
+    types: [review_requested]
 
 jobs:
   anya-review:
     if: |
-      github.event.comment.user.login != 'anya-research' &&
-      github.event.comment.user.login != 'yuki-fuyutsuki' &&
-      contains(github.event.comment.body, '/anya review')
+      (
+        github.event_name == 'pull_request' &&
+        github.event.requested_reviewer.login == 'anya-research'
+      ) || (
+        github.event.comment.user.login != 'anya-research' &&
+        github.event.comment.user.login != 'yuki-fuyutsuki' &&
+        contains(github.event.comment.body, '/anya review')
+      )
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -61,3 +68,40 @@ jobs:
             - Do NOT report style nits, formatting, naming preferences, or anything linters already catch.
             - Do NOT invent issues to seem thorough. If the diff is clean, say so explicitly and briefly note what was done well.
             - Keep the whole review under 600 words unless there are many findings.
+
+            Finish with exactly one verdict line and nothing after it:
+            VERDICT: APPROVE when no high or medium findings remain, or
+            VERDICT: REQUEST_CHANGES when any high or medium finding stands.
+            Low severity findings never block approval. Write like a maintainer:
+            direct, specific, no filler, no praise padding.
+
+      - name: Submit formal review state
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.ANYA_TOKEN }}
+        run: |
+          set -uo pipefail
+          PR="${{ github.event.pull_request.number }}"
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            PR="${{ github.event.issue.number }}"
+          fi
+          if [ -z "$PR" ] || [ "$PR" = "null" ]; then
+            echo "No PR number in event, skipping formal review."
+            exit 0
+          fi
+          HEAD_SHA=$(gh pr view "$PR" --json headRefOid --jq .headRefOid)
+          LATEST=$(gh pr view "$PR" --json comments --jq '[.comments[] | select(.author.login == "anya-research") | .body] | last // ""')
+          if printf '%s' "$LATEST" | grep -q 'VERDICT: REQUEST_CHANGES'; then
+            EVENT=REQUEST_CHANGES
+          elif printf '%s' "$LATEST" | grep -q 'VERDICT: APPROVE'; then
+            EVENT=APPROVE
+          else
+            echo "No verdict line in latest Anya comment, skipping formal review."
+            exit 0
+          fi
+          gh api "repos/${{ github.repository }}/pulls/$PR/reviews" \
+            -X POST \
+            -f commit_id="$HEAD_SHA" \
+            -f event="$EVENT" \
+            -f body="Formal review state for the Anya review above. See the full findings and suggestion blocks in the review comment."
+            --jq '{id, state}'
