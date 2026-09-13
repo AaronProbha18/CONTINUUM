@@ -41,7 +41,6 @@ jobs:
   test:
     name: Test (${{ matrix.os }}, Python ${{ matrix.python-version }})
     needs: detect
-    if: needs.detect.outputs.docs-only != 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -52,16 +51,22 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Docs-only short-circuit: the job must still report a conclusion so
+      # required per-version contexts do not pend forever (a fully skipped
+      # matrix posts no check runs at all). Heavy steps stand down instead.
       - name: Set up Python ${{ matrix.python-version }}
+        if: needs.detect.outputs.docs-only != 'true'
         uses: actions/setup-python@v7.0.0
         with:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
       - name: Install dev dependencies
+        if: needs.detect.outputs.docs-only != 'true'
         run: pip install -e ".[dev]"
 
       - name: Run tests with coverage
+        if: needs.detect.outputs.docs-only != 'true'
         run: pytest --tb=short -q --cov=continuum --cov-report=xml --cov-report=term-missing
 
       - name: Upload coverage report
