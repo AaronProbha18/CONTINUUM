@@ -122,7 +122,14 @@ jobs:
             view for their changed files, gh issue view for whether the
             linked issue is already closed.
 
-            Verification toolkit, run what fits and quote real output:
+            Verification toolkit, run what fits and quote real output.
+            Budget rules, always: cap every command to about 100 lines with
+            head, tail, or tighter scope, and rerun narrower instead of
+            dumping wider. Targeted tests only, never the full suite. Trust
+            the CI matrix for full-suite, lint, and type-check conclusions
+            and read them from the PR. Keep total investigation proportional
+            to diff size: a docs touch gets diff plus checks status, a risky
+            core change earns surrounding files and one relevant test file.
             - git diff --stat plus git diff on the PR head for the real change
             - AST check for undocumented public names in touched files
             - ruff check plus ruff format --check on touched files
