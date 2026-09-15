@@ -522,6 +522,25 @@ Beyond the original plan: the MCP server, MCP authorization and caller-authentic
 
 The core abstraction: `semantic state + environment validation + action reconciliation = safe recovery`.
 
+### The verdict is advisory, not enforced
+
+CONTINUUM tells you the truth about a run. It does not stop your process when the answer is unwelcome. `RecoveryDecision.permits()` reports what the contract allows; nothing in the library intervenes if a caller ignores a `False` and acts anyway. A worker that calls `CheckpointManager.restore` directly can continue past a `REQUEST_HUMAN` verdict, because it never asked the engine whether to.
+
+This is a deliberate contract for a library: forcing enforcement inside a call the caller made to inspect a verdict would surprise the callers who legitimately want to read it and then override it.
+
+Enforcement exists, but as separate seams you opt into. None is enabled by a plain `pip install continuum-agent`:
+
+| Seam | How to enable |
+|:--|:--|
+| Host gate | `continuum gate` |
+| HTTP gateway | `continuum gateway` |
+| Replay guard for framework calls | `continuum.replayguard` in-process |
+| Observation hooks | `continuum hooks install` |
+
+The one enforcement that ships enabled is the CLI exit code. `continuum resume` exits non-zero unless the run is verified safe (`RESUME`), so `continuum resume "$RUN" && ./start-agent.sh` cannot launch onto stale state. Every other mode maps to a distinct non-zero code, and a mode nobody has classified falls through to `UNSAFE` rather than `OK`.
+
+If you want the verdict enforced, wire a seam or gate your pipeline on the exit code. Do not assume the library is supervising the process.
+
 ## Related work
 
 CONTINUUM sits at the overlap of durable execution, idempotent side-effect tracking, and crash recovery for LLM agents. The closest neighbors are machine-checked resume contracts (Khan 2026), agentic transaction processing with constraint-gated admission (Mnemosyne 2026), checkpoint-rollback attack analysis (ACRFence 2026), and design-level prompt-injection defense (CaMeL 2025). The full annotated list, foundations, and citation audit are in [references/related-work.md](references/related-work.md).
