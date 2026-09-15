@@ -216,6 +216,49 @@ def test_falsifiable_two_runs_identical_except_fabricated_progress(tmp_path: Pat
     assert delta > 0.15, f"trust did not diverge enough: {score_a} vs {score_b} delta {delta}"
 
 
+def test_an_agent_declared_dependency_cannot_buy_trust_with_a_version() -> None:
+    """A dependency is scored by who declared it, not by whether it names a version.
+
+    The module's own definition of trusted is "recorded by deterministic local
+    code or by a human, not by an autonomous agent reporting on itself". A
+    version string is not a certificate of who recorded it, so an agent declaring
+    a versioned dependency must not raise its own role score (issue #1065).
+    """
+    from continuum.state.semantic import project
+
+    def _seed(source: Origin, *, declare: bool) -> dict:  # type: ignore[type-arg]
+        storage = SQLiteStorage(":memory:")
+        storage.create_run(Run(run_id="r1", goal="ship"))
+        storage.append_event("r1", EventType.RUN_STARTED, {"goal": "ship"}, source=source)
+        storage.append_event("r1", EventType.WORK_COMPLETED, {"doc": 0}, source=source)
+        if declare:
+            storage.append_event(
+                "r1",
+                EventType.DEPENDENCY_DECLARED,
+                {"resource": "dataset", "version": "v1"},
+                source=source,
+            )
+        state = project("r1", storage.read_events("r1"))
+        score = trust_over_prefix(state)
+        storage.close()
+        return score
+
+    agent_with_dep = _seed(Origin.EXTERNAL_AGENT, declare=True)
+    agent_without_dep = _seed(Origin.EXTERNAL_AGENT, declare=False)
+    # Declaring the dependency changed nothing about who asserted the run's facts,
+    # so the role score must be identical: no trust purchased with a version.
+    assert agent_with_dep["breakdown"]["role"] == agent_without_dep["breakdown"]["role"] == 0.0
+    # And the dependency's freshness credit is reduced, not awarded in full.
+    assert agent_with_dep["breakdown"]["evidence"] < 0.9
+
+    # A dependency declared by a trusted source is still credited in full.
+    trusted_with_dep = _seed(Origin.DETERMINISTIC, declare=True)
+    assert trusted_with_dep["breakdown"]["role"] == 1.0
+    assert trusted_with_dep["breakdown"]["evidence"] == 0.9
+    # Mode invariance preserved: the score is advisory and never gates.
+    assert trusted_with_dep["trust_score"] > agent_with_dep["trust_score"]
+
+
 def test_health_command_is_advisory_and_never_gates(tmp_path: Path) -> None:
     """Health command is advisory, never gates, never changes exit code."""
     db = tmp_path / "h.db"
