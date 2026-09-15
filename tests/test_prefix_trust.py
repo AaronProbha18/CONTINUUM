@@ -226,37 +226,44 @@ def test_an_agent_declared_dependency_cannot_buy_trust_with_a_version() -> None:
     """
     from continuum.state.semantic import project
 
-    def _seed(source: Origin, *, declare: bool) -> dict:  # type: ignore[type-arg]
+    def _seed(source: Origin, *, version: str | None = "v1", declare: bool = True) -> dict:  # type: ignore[type-arg]
         storage = SQLiteStorage(":memory:")
         storage.create_run(Run(run_id="r1", goal="ship"))
         storage.append_event("r1", EventType.RUN_STARTED, {"goal": "ship"}, source=source)
         storage.append_event("r1", EventType.WORK_COMPLETED, {"doc": 0}, source=source)
         if declare:
-            storage.append_event(
-                "r1",
-                EventType.DEPENDENCY_DECLARED,
-                {"resource": "dataset", "version": "v1"},
-                source=source,
-            )
+            payload = {"resource": "dataset"}
+            if version is not None:
+                payload["version"] = version
+            storage.append_event("r1", EventType.DEPENDENCY_DECLARED, payload, source=source)
         state = project("r1", storage.read_events("r1"))
         score = trust_over_prefix(state)
         storage.close()
         return score
 
-    agent_with_dep = _seed(Origin.EXTERNAL_AGENT, declare=True)
+    agent_with_dep = _seed(Origin.EXTERNAL_AGENT)
     agent_without_dep = _seed(Origin.EXTERNAL_AGENT, declare=False)
     # Declaring the dependency changed nothing about who asserted the run's facts,
     # so the role score must be identical: no trust purchased with a version.
     assert agent_with_dep["breakdown"]["role"] == agent_without_dep["breakdown"]["role"] == 0.0
-    # And the dependency's freshness credit is reduced, not awarded in full.
-    assert agent_with_dep["breakdown"]["evidence"] < 0.9
 
-    # A dependency declared by a trusted source is still credited in full.
-    trusted_with_dep = _seed(Origin.DETERMINISTIC, declare=True)
+    trusted_with_dep = _seed(Origin.DETERMINISTIC)
     assert trusted_with_dep["breakdown"]["role"] == 1.0
-    assert trusted_with_dep["breakdown"]["evidence"] == 0.9
     # Mode invariance preserved: the score is advisory and never gates.
     assert trusted_with_dep["trust_score"] > agent_with_dep["trust_score"]
+
+    # Every cell of the origin x version matrix is pinned, so neither arm of the
+    # credit can regress unnoticed. The dependency is the only scored fact here,
+    # so the evidence breakdown is the credit itself.
+    trusted_unversioned = _seed(Origin.DETERMINISTIC, version=None)
+    assert trusted_with_dep["breakdown"]["evidence"] == 0.9
+    assert trusted_unversioned["breakdown"]["evidence"] == 0.3
+    assert agent_with_dep["breakdown"]["evidence"] == 0.2
+    assert _seed(Origin.EXTERNAL_AGENT, version=None)["breakdown"]["evidence"] == 0.1
+    # A version is never worth more than the origin that recorded it: an
+    # unversioned declaration from a trusted source still outranks a versioned
+    # one from an agent reporting on itself.
+    assert trusted_unversioned["breakdown"]["evidence"] > agent_with_dep["breakdown"]["evidence"]
 
 
 def test_health_command_is_advisory_and_never_gates(tmp_path: Path) -> None:
