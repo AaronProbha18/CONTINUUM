@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- **The horizon `abort_condition_year` scenario now reaches abort (#1028).**
+  The scenario was labelled `correct_mode="abort"` but drove the abort through
+  `DECISION_INVALIDATED`, an event the recovery engine never routes to `ABORT`
+  (decision invalidation escalates to `REQUEST_HUMAN` instead). The scenario
+  failed by construction and capped the published horizon accuracy at 0.60
+  without any real regression in decision quality. `ABORT` is reachable only
+  through the risk policy (`recovery/risk.py` maps `side_effect_duplicate` to
+  `ABORT`), so the scenario now emits that `RISK_OBSERVED` event and exercises
+  the mechanism that exists. Published accuracy moves 0.60 to 0.80, and
+  `references/bench.md` plus the README bench section regenerate from the real
+  run. Two tests pin the property: a fast unit test asserting the
+  `side_effect_duplicate -> abort` mapping holds, and a slow benchmark test
+  asserting the scenario reaches abort, so a future engine change that drops
+  the risk path turns the suite red instead of silently deflating the figure.
+  `quarterly_drift_year` still fails (label `repair`, actual `request_human`)
+  and is deliberately left alone: whether dataset drift should be repaired
+  rather than escalated is an open labelling question, not a defect.
+
 ### Added
 
 - **Curated briefing by provenance (#742).** `continuum briefing` no longer
