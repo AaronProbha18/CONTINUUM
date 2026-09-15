@@ -21,6 +21,16 @@ All notable changes to this project are documented here. The format follows
   no product caller and still has none, so this documents the existing
   contract rather than altering it.
 
+### Removed
+
+- **Dead `observations_evidence_lines` helper (#867).** The function in
+  `src/continuum/recovery/observations.py` was defined once and called
+  nowhere: leftover scaffolding from #208 whose engine-side rendering at
+  `recovery/engine.py` formats the same evidence its own way. Dead code in a
+  safety-critical path misled the next reader into thinking contract evidence
+  flows through it. No callers, not exported through `__all__`; recoverable
+  from history (355ba76) if a future surface needs that exact rendering.
+
 ### Fixed
 
 - **The horizon `abort_condition_year` scenario now reaches abort (#1028).**
