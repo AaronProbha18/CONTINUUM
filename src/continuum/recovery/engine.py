@@ -527,7 +527,7 @@ class RecoveryEngine:
             plan=plan,
         )
 
-        return RecoveryDecision(
+        decision = RecoveryDecision(
             run_id=run_id,
             mode=mode,
             contract=contract,
@@ -540,6 +540,20 @@ class RecoveryEngine:
             tail_evidence=tail_evidence,
             informed_retry=informed_retry,
         )
+
+        # Process-wide counters (#1032). Imported lazily: observability imports
+        # RecoveryDecision from this module, so a top-level import would be
+        # circular. Collection is best-effort and never affects the verdict: a
+        # caller who resets or replaces the collector still gets the same
+        # decision, and a failure here must not change a safety property.
+        try:
+            from continuum.observability import collect_from_decision
+
+            collect_from_decision(decision)
+        except Exception:
+            pass
+
+        return decision
 
     # -- the decision rule ------------------------------------------------ #
 
