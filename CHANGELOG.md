@@ -33,6 +33,30 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- **`load_reconcilers` now refuses a registry missing the `probes` wrapper
+  instead of silently loading it as empty (#1062).** A file that maps action
+  types at the top level (`{"send_invoice": {...}}`) instead of nesting them
+  under `probes` is valid JSON, so `raw.get("probes", {})` and
+  `raw.get("probes") or {}` both defaulted to `{}` and the loader returned an
+  empty registry with no warning. Every uncertain action of that type then
+  read as having no probe registered, and nothing in that message pointed at
+  the missing wrapper as the cause. `load_reconcilers` now raises
+  `ReconcilerConfigError` naming the top-level keys it found and the `probes`
+  wrapper they belong under. An empty file (`{}`) is unaffected and still
+  loads as a valid empty registry. `gate.py` has the identical pattern for its
+  `tools` wrapper; left alone here since it's outside this issue's scope.
+
+  The three guidance call sites that read the registry (`resume` in the CLI,
+  the TUI's recovery view, and the MCP server's `continuum_resume`) each
+  caught every exception around `load_reconcilers` and fell back to an empty
+  probe list, so the new diagnostic above was getting silently absorbed the
+  same way the old empty-dict default was. Each now lets `ReconcilerConfigError`
+  through, matching how it already handles other errors: the CLI's existing
+  top-level `ValueError` handler prints it and exits non-zero, the TUI
+  prepends it to the rendered steps rather than dropping the run's guidance
+  entirely, and the MCP server raises it as a `ToolError` so the calling agent
+  sees it.
+
 - **The horizon `abort_condition_year` scenario now reaches abort (#1028).**
   The scenario was labelled `correct_mode="abort"` but drove the abort through
   `DECISION_INVALIDATED`, an event the recovery engine never routes to `ABORT`
