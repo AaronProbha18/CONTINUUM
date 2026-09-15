@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- **The advisory verdict contract is now stated where a reader can find it (#1031).**
+  `RecoveryDecision` and its `permits()` method describe themselves as
+  advisory, not enforcing, and name the four enforcement seams a caller can
+  opt into instead (host gate, HTTP gateway, replay guard, observation hooks),
+  none of which is enabled by a plain install. README gains a "The verdict is
+  advisory, not enforced" subsection under "What CONTINUUM Is Not", and
+  `docs/recovery_walkthrough.md` gains "The verdict is advisory", which points
+  out that the CLI exit code, not the verdict, is what gates a chained
+  pipeline and that calling `CheckpointManager.restore` directly keeps the
+  verdict but drops that enforcement. Behaviour is unchanged: `permits()` had
+  no product caller and still has none, so this documents the existing
+  contract rather than altering it.
+
 ### Fixed
 
 - **The horizon `abort_condition_year` scenario now reaches abort (#1028).**
